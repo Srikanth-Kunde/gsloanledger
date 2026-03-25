@@ -434,6 +434,9 @@ function generateLedger(memberId) {
   
   ledgerSheet.clear();
   ledgerSheet.clearConditionalFormatRules();
+  if (ledgerSheet.getMaxRows() > 1) {
+    ledgerSheet.getRange(1, 1, ledgerSheet.getMaxRows(), 9).clearFormat();
+  }
   
   // Get member details
   const memberData = memberSheet.getDataRange().getValues();
@@ -484,6 +487,9 @@ function generateLedger(memberId) {
     for (let i = 1; i < intData.length; i++) {
       if (intData[i][0] == memberId) {
         const intDate = parseDate(intData[i][7]); // Date column
+        // Strict Cut-off: Skip entries after Jan 2026
+        if (intDate > new Date(2026, 0, 31)) continue;
+        
         const intAmount = parseFloat(intData[i][4] || 0); // Interest Amount
         const rate = intData[i][5]; // Rate
         
@@ -523,8 +529,9 @@ function generateLedger(memberId) {
   
   // Column Headers - Tally Format
   ledgerSheet.appendRow([
-    'Sl.No', 'Date', 'Particulars', 'Vch Type', 'Debit (Dr)', 'Credit (Cr)', 'Interest', 'Balance', 'Narration'
+    "'Sl No", 'Date', 'Particulars', 'Vch Type', 'Debit (Dr)', 'Credit (Cr)', 'Interest', 'Balance', 'Narration'
   ]);
+  const headerRow = ledgerSheet.getLastRow();
   
   let runningBalance = 0;
   let totalDebit = 0;      // Total Loans (Principal + Top-up)
@@ -544,9 +551,9 @@ function generateLedger(memberId) {
     sno++;
     
     if (entry.isInterest) {
-      // Interest entry - adds to balance
+      // Interest entry - adds TO TOTAL INTEREST but NOT to balance column
       totalInterest += entry.interest;
-      runningBalance += entry.interest;
+      // runningBalance += entry.interest; // BUG FIX: Don't add interest to running balance
       
       ledgerSheet.appendRow([
         sno,
@@ -608,8 +615,8 @@ function generateLedger(memberId) {
     ''
   ]);
   
-  // Total Due Calculation
-  const totalDue = totalDebit - totalCredit + totalInterest;
+  // Total Due Calculation (Principal Only as per user request)
+  const totalDue = Math.max(0, totalDebit - totalCredit);
 
   // Account Summary - Tally Style
   const summaryStartRow = ledgerSheet.getLastRow() + 2;
@@ -628,7 +635,7 @@ function generateLedger(memberId) {
   if (totalDue <= 0) {
     ledgerSheet.appendRow(['', '', '', 'STATUS:', '', 'BALANCE: ZERO', '', '', '']);
   } else {
-    ledgerSheet.appendRow(['', '', '', 'TOTAL AMOUNT DUE', '', formatCurrency(totalDue), '', '', '']);
+    ledgerSheet.appendRow(['', '', '', 'TOTAL DUE (Principal):', '', formatCurrency(totalDue), '', '', '']);
   }
   ledgerSheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════']);
   
@@ -654,7 +661,7 @@ function generateLedger(memberId) {
   ledgerSheet.getRange('D3').setFontWeight('bold');
   
   // Column headers
-  const headerRow = 7;
+  // Column headers (Dynamic Row)
   ledgerSheet.getRange(headerRow, 1, 1, 9).setFontWeight('bold').setBackground('#4285F4').setFontColor('white').setHorizontalAlignment('center');
   
   // Find totals row and format
@@ -666,7 +673,7 @@ function generateLedger(memberId) {
     if (cellValue === 'TOTALS') {
       ledgerSheet.getRange(r, 1, 1, 9).setFontWeight('bold').setBackground('#e8f0fe');
     }
-    if (cellValue === 'TOTAL AMOUNT DUE') {
+    if (cellValue === 'TOTAL DUE (Principal):') {
       ledgerSheet.getRange(r, 1, 1, 9).setFontWeight('bold').setBackground('#c6efce').setFontSize(12);
     }
     if (cellValue === 'ACCOUNT SUMMARY') {
@@ -714,6 +721,9 @@ function generateAllMembersLedger() {
   const allLedgerSheet = getSheet(SHEETS.ALL_LEDGERS);
   allLedgerSheet.clear();
   allLedgerSheet.clearConditionalFormatRules();
+  if (allLedgerSheet.getMaxRows() > 1) {
+    allLedgerSheet.getRange(1, 1, allLedgerSheet.getMaxRows(), 9).clearFormat();
+  }
   
   const txnSheet = ss.getSheetByName(SHEETS.TRANSACTIONS);
   const memberSheet = ss.getSheetByName(SHEETS.MEMBERS);
@@ -736,13 +746,17 @@ function generateAllMembersLedger() {
     const intData = interestSheet.getDataRange().getValues();
     for (let i = 1; i < intData.length; i++) {
       const mid = intData[i][0];
+      const intDate = parseDate(intData[i][7]);
+      // Strict Cut-off: Skip entries after Jan 2026
+      if (intDate > new Date(2026, 0, 31)) continue;
+      
       if (!interestByMember[mid]) {
         interestByMember[mid] = 0;
         interestEntriesByMember[mid] = [];
       }
       interestByMember[mid] += parseFloat(intData[i][4] || 0);
       interestEntriesByMember[mid].push({
-        date: parseDate(intData[i][7]),
+        date: intDate,
         amount: parseFloat(intData[i][4] || 0),
         rate: intData[i][5]
       });
@@ -813,7 +827,7 @@ function generateAllMembersLedger() {
     allLedgerSheet.getRange(memberHeaderRow, 1, 1, 9).merge().setFontWeight('bold').setFontSize(12).setBackground('#e8f0fe');
     
     // Column headers
-    allLedgerSheet.appendRow(['Sl.No', 'Date', 'Particulars', 'Vch Type', 'Debit (Dr)', 'Credit (Cr)', 'Interest', 'Balance', 'Narration']);
+    allLedgerSheet.appendRow(["'Sl No", 'Date', 'Particulars', 'Vch Type', 'Debit (Dr)', 'Credit (Cr)', 'Interest', 'Balance', 'Narration']);
     const colHeaderRow = allLedgerSheet.getLastRow();
     allLedgerSheet.getRange(colHeaderRow, 1, 1, 9).setFontWeight('bold').setBackground('#d0e0f0').setFontSize(10);
     
@@ -831,7 +845,7 @@ function generateAllMembersLedger() {
       
       if (entry.isInterest) {
         totalInterest += entry.interest;
-        runningBalance += entry.interest;
+        // runningBalance += entry.interest; // BUG FIX: Don't add interest to balance column
         
         allLedgerSheet.appendRow([
           sno, formatDate(entry.date), 'Interest Charged', 'Interest',
@@ -861,7 +875,7 @@ function generateAllMembersLedger() {
     
     // Member summary
     const principalDue = Math.max(0, totalDebit - totalCredit);
-    const totalDue = principalDue + totalInterest;
+    const totalDue = principalDue; // TOTAL DUE IS PRINCIPAL ONLY AS PER REQUEST
     const summaryStartRow = allLedgerSheet.getLastRow() + 1;
     
     allLedgerSheet.appendRow(['', '', '', 'TOTALS', formatCurrency(totalDebit), formatCurrency(totalCredit), formatCurrency(totalInterest), '', '']);
@@ -873,7 +887,7 @@ function generateAllMembersLedger() {
     if (totalDue <= 0) {
       allLedgerSheet.appendRow(['', '', '', 'STATUS:', 'BALANCE: ZERO', '', '', '', '']);
     } else {
-      allLedgerSheet.appendRow(['', '', '', 'TOTAL DUE:', formatCurrency(totalDue), '', '', '', '']);
+      allLedgerSheet.appendRow(['', '', '', 'TOTAL DUE (Principal):', formatCurrency(totalDue), '', '', '', '']);
     }
     
     const summaryEndRow = allLedgerSheet.getLastRow();
