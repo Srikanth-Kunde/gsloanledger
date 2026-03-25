@@ -1,0 +1,1131 @@
+// ═══════════════════════════════════════════════════════════════
+// LOAN MANAGEMENT SYSTEM - GOOGLE SHEETS v3.0
+// - Interest starts from NEXT month (not same month as loan)
+// - Tally Audit Format
+// - Ledger with Interest Column
+// ═══════════════════════════════════════════════════════════════
+
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('📊 Loan Manager')
+    .addItem('🔄 Generate Interest for All', 'generateInterestAll')
+    .addSeparator()
+    .addItem('📋 Single Member Ledger', 'showMemberLedger')
+    .addItem('📋 ALL Members Ledger', 'generateAllMembersLedger')
+    .addSeparator()
+    .addItem('📊 Summary Report', 'showSummaryReport')
+    .addItem('🗑️ Clear Auto-Generated Interest', 'clearAutoInterest')
+    .addSeparator()
+    .addItem('⚙️ Settings & Help', 'showSettings')
+    .addItem('🐛 Debug Check', 'debugCheckData')
+    .addToUi();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════════════
+
+const SHEETS = {
+  MEMBERS: 'Members',
+  TRANSACTIONS: 'Transactions',
+  RATES: 'Interest Rate Config',
+  INTEREST: 'Interest Details',
+  LEDGER: 'Ledger',
+  ALL_LEDGERS: 'All Members Ledger',
+  SUMMARY: 'Summary'
+};
+
+// ═══════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+
+function getSheet(name) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+  }
+  return sheet;
+}
+
+function parseDate(dateStr) {
+  if (!dateStr) return null;
+  if (dateStr instanceof Date) {
+    return isNaN(dateStr.getTime()) ? null : dateStr;
+  }
+  dateStr = dateStr.toString().trim();
+  if (dateStr.includes('T')) {
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? null : date;
+  }
+  const mmyyyyMatch = dateStr.match(/^(\d{1,2})[-\/](\d{4})$/);
+  if (mmyyyyMatch) {
+    return new Date(parseInt(mmyyyyMatch[2]), parseInt(mmyyyyMatch[1]) - 1, 1);
+  }
+  const ddmmyyyyMatch = dateStr.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+  if (ddmmyyyyMatch) {
+    return new Date(parseInt(ddmmyyyyMatch[3]), parseInt(ddmmyyyyMatch[2]) - 1, parseInt(ddmmyyyyMatch[1]));
+  }
+  const date = new Date(dateStr);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function formatDate(date) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+function formatMonthYear(date) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[date.getMonth()]}-${date.getFullYear()}`;
+}
+
+function getInterestRate(forDate, ratesData) {
+  if (!forDate || !(forDate instanceof Date)) return 1.5;
+  for (let i = 0; i < ratesData.length; i++) {
+    const fromDate = parseDate(ratesData[i][1]);
+    const toDate = parseDate(ratesData[i][2]);
+    if (fromDate && toDate && forDate >= fromDate && forDate <= toDate) {
+      return parseFloat(ratesData[i][0]) || 1.5;
+    }
+  }
+  return 1.5;
+}
+
+function addMonths(date, months) {
+  const newDate = new Date(date);
+  newDate.setMonth(newDate.getMonth() + months);
+  return newDate;
+}
+
+function getMonthStart(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function getMonthEnd(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function getDaysInMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+function formatCurrency(amount) {
+  if (amount === 0 || amount === '' || amount === null || isNaN(amount)) return '';
+  return '₹' + Math.round(amount).toLocaleString('en-IN');
+}
+
+function formatCurrencyNumber(amount) {
+  if (amount === 0 || amount === '' || amount === null || isNaN(amount)) return 0;
+  return Math.round(amount * 100) / 100;
+}
+
+function getVoucherColumn(headers) {
+  for (let i = 0; i < headers.length; i++) {
+    if (headers[i] && headers[i].toString().replace(/\s+/g, ' ').trim().toLowerCase() === 'voucher type') {
+      return i;
+    }
+  }
+  return 4; // Default
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CORE: INTEREST GENERATION
+// Interest starts from NEXT MONTH after loan is taken
+// ═══════════════════════════════════════════════════════════════
+
+function generateInterestForMember(memberId, memberName, upToDate, ratesData, txnData, headers) {
+  const colMap = {};
+  headers.forEach((h, i) => {
+    if (h) colMap[h.toString().trim()] = i;
+  });
+  const voucherCol = getVoucherColumn(headers);
+  
+  // Get member transactions (excluding interest entries)
+  const memberTxns = [];
+  for (let i = 1; i < txnData.length; i++) {
+    const row = txnData[i];
+    const txnMemberId = row[colMap['Member ID']];
+    const voucherType = row[voucherCol];
+    
+    if (voucherType && voucherType.toString().includes('Interest')) continue;
+    
+    if (txnMemberId == memberId) {
+      const txnDate = parseDate(row[colMap['Date']]);
+      if (!txnDate) continue;
+      
+      memberTxns.push({
+        date: txnDate,
+        voucherType: voucherType ? voucherType.toString().trim() : '',
+        debit: parseFloat(row[colMap['Debit']] || 0),
+        credit: parseFloat(row[colMap['Credit']] || 0),
+        interestDays: row[colMap['Interest Days']] ? parseInt(row[colMap['Interest Days']]) : null,
+        narration: row[colMap['Narration']] || ''
+      });
+    }
+  }
+  
+  if (memberTxns.length === 0) {
+    return { interest: [], principal: 0, totalInterest: 0, transactions: [] };
+  }
+  
+  memberTxns.sort((a, b) => a.date - b.date);
+  
+  const firstDate = memberTxns[0].date;
+  const interestEntries = [];
+  
+  // Start from the NEXT month after first loan
+  let currentMonth = addMonths(getMonthStart(firstDate), 1);
+  let principalBalance = 0;
+  let totalInterest = 0;
+  
+  // Process first month's transactions to get initial principal (no interest for first month)
+  const firstMonthTxns = memberTxns.filter(t => 
+    t.date.getFullYear() === firstDate.getFullYear() &&
+    t.date.getMonth() === firstDate.getMonth()
+  );
+  
+  for (const txn of firstMonthTxns) {
+    if (txn.voucherType === 'Loan') {
+      principalBalance += txn.debit;
+    } else if (txn.voucherType === 'Payment') {
+      principalBalance -= txn.credit;
+      if (principalBalance < 0) principalBalance = 0;
+    }
+  }
+  
+  // Now calculate interest from second month onwards
+  while (currentMonth <= upToDate) {
+    const monthEnd = getMonthEnd(currentMonth);
+    const daysInMonth = getDaysInMonth(currentMonth);
+    
+    // Opening balance is the principal at start of this month
+    const openingBalance = principalBalance;
+    let monthInterest = 0;
+    
+    // Calculate interest on opening balance (loans from previous months)
+    if (openingBalance > 0) {
+      const rate = getInterestRate(currentMonth, ratesData);
+      monthInterest = openingBalance * (rate / 100);
+    }
+    
+    // Process transactions in this month
+    const monthTxns = memberTxns.filter(t => 
+      t.date.getFullYear() === currentMonth.getFullYear() &&
+      t.date.getMonth() === currentMonth.getMonth()
+    );
+    
+    for (const txn of monthTxns) {
+      if (txn.voucherType === 'Loan') {
+        // New loan - add to principal but NO interest this month
+        // Interest on this new loan will start from NEXT month
+        principalBalance += txn.debit;
+        
+        // If interest days specified, calculate pro-rata for THIS loan only
+        if (txn.interestDays && txn.interestDays > 0) {
+          const rate = getInterestRate(txn.date, ratesData);
+          monthInterest += txn.debit * (rate / 100) * (txn.interestDays / 30);
+        }
+        // If no interest days specified, no interest this month for new loan
+        
+      } else if (txn.voucherType === 'Payment') {
+        principalBalance -= txn.credit;
+        if (principalBalance < 0) principalBalance = 0;
+      }
+    }
+    
+    // Record interest entry
+    if (monthInterest > 0) {
+      const rate = getInterestRate(currentMonth, ratesData);
+      interestEntries.push({
+        date: monthEnd,
+        month: formatMonthYear(monthEnd),
+        memberId: memberId,
+        memberName: memberName,
+        amount: Math.round(monthInterest * 100) / 100,
+        rate: rate,
+        openingBalance: Math.round(openingBalance * 100) / 100,
+        closingBalance: Math.round(principalBalance * 100) / 100
+      });
+      totalInterest += monthInterest;
+    }
+    
+    currentMonth = addMonths(currentMonth, 1);
+  }
+  
+  return {
+    interest: interestEntries,
+    principal: Math.round(principalBalance * 100) / 100,
+    totalInterest: Math.round(totalInterest * 100) / 100,
+    transactions: memberTxns
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CLEAR AUTO INTEREST
+// ═══════════════════════════════════════════════════════════════
+
+function clearAutoInterest() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // Clear Interest Details sheet
+  const interestSheet = ss.getSheetByName(SHEETS.INTEREST);
+  if (interestSheet) {
+    interestSheet.clear();
+  }
+  
+  // Remove Interest entries from Transactions (cleanup old format)
+  const txnSheet = ss.getSheetByName(SHEETS.TRANSACTIONS);
+  if (txnSheet) {
+    const data = txnSheet.getDataRange().getValues();
+    const voucherCol = getVoucherColumn(data[0]);
+    
+    for (let i = data.length - 1; i >= 1; i--) {
+      const voucherType = data[i][voucherCol];
+      if (voucherType && voucherType.toString().includes('Interest')) {
+        txnSheet.deleteRow(i + 1);
+      }
+    }
+  }
+  
+  ui.alert('✅ Auto-generated interest cleared!');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GENERATE INTEREST FOR ALL MEMBERS
+// ═══════════════════════════════════════════════════════════════
+
+function generateInterestAll() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  const response = ui.alert(
+    'Generate Interest for All Members',
+    'This will:\n' +
+    '• Calculate interest starting from the MONTH AFTER loan\n' +
+    '• Store interest in "Interest Details" tab\n' +
+    '• Keep Transactions tab clean\n\n' +
+    'Continue?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (response !== ui.Button.YES) return;
+  
+  // Clear old interest
+  const interestSheet = getSheet(SHEETS.INTEREST);
+  interestSheet.clear();
+  
+  // Clean Transactions of any old Interest entries
+  const txnSheet = ss.getSheetByName(SHEETS.TRANSACTIONS);
+  if (txnSheet) {
+    const data = txnSheet.getDataRange().getValues();
+    const voucherCol = getVoucherColumn(data[0]);
+    for (let i = data.length - 1; i >= 1; i--) {
+      const voucherType = data[i][voucherCol];
+      if (voucherType && voucherType.toString().includes('Interest')) {
+        txnSheet.deleteRow(i + 1);
+      }
+    }
+  }
+  
+  // Setup Interest Details header
+  interestSheet.appendRow([
+    'Member ID', 'Member Name', 'Month', 'Opening Balance', 'Interest Amount', 'Rate %', 'Closing Balance', 'Date'
+  ]);
+  interestSheet.getRange('A1:H1').setFontWeight('bold').setBackground('#4285F4').setFontColor('white');
+  
+  // Get data
+  const rateSheet = ss.getSheetByName(SHEETS.RATES);
+  const ratesData = rateSheet ? rateSheet.getDataRange().getValues().slice(1) : [];
+  
+  const memberSheet = ss.getSheetByName(SHEETS.MEMBERS);
+  const memberData = memberSheet.getDataRange().getValues().slice(1);
+  
+  const txnData = txnSheet.getDataRange().getValues();
+  const headers = txnData[0];
+  
+  const upToDate = new Date(2026, 0, 31); // Hardcoded cut-off: Jan 2026
+  let processedCount = 0;
+  let allInterestRows = [];
+  
+  for (const member of memberData) {
+    const memberId = member[0];
+    const memberName = member[1];
+    
+    if (!memberId) continue;
+    
+    const result = generateInterestForMember(memberId, memberName, upToDate, ratesData, txnData, headers);
+    
+    if (result.interest.length > 0) {
+      for (const entry of result.interest) {
+        allInterestRows.push([
+          entry.memberId,
+          entry.memberName,
+          entry.month,
+          entry.openingBalance,
+          entry.amount,
+          entry.rate,
+          entry.closingBalance,
+          formatDate(entry.date)
+        ]);
+      }
+      processedCount++;
+    }
+  }
+  
+  // Write all interest entries
+  if (allInterestRows.length > 0) {
+    interestSheet.getRange(2, 1, allInterestRows.length, 8).setValues(allInterestRows);
+    
+    // Format currency columns
+    interestSheet.getRange(2, 4, allInterestRows.length, 1).setNumberFormat('₹#,##0');
+    interestSheet.getRange(2, 5, allInterestRows.length, 1).setNumberFormat('₹#,##0.00');
+    interestSheet.getRange(2, 7, allInterestRows.length, 1).setNumberFormat('₹#,##0');
+  }
+  
+  for (let i = 1; i <= 8; i++) {
+    interestSheet.autoResizeColumn(i);
+  }
+  
+  ui.alert(
+    `✅ Interest Generated!\n\n` +
+    `• Processed: ${processedCount} members\n` +
+    `• Total entries: ${allInterestRows.length}\n` +
+    `• Interest starts from NEXT month after loan\n\n` +
+    `View "Interest Details" tab.`
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SINGLE MEMBER LEDGER - TALLY FORMAT
+// S.No | Date | Type | Debit | Credit | Interest | Balance | Narration
+// ═══════════════════════════════════════════════════════════════
+
+function showMemberLedger() {
+  const ui = SpreadsheetApp.getUi();
+  const result = ui.prompt(
+    'Generate Member Ledger',
+    'Enter Member ID:',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (result.getSelectedButton() !== ui.Button.OK) return;
+  
+  const memberId = parseInt(result.getResponseText());
+  if (!memberId && memberId !== 0) {
+    ui.alert('Invalid Member ID');
+    return;
+  }
+  
+  generateLedger(memberId);
+}
+
+function generateLedger(memberId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const txnSheet = ss.getSheetByName(SHEETS.TRANSACTIONS);
+  const memberSheet = ss.getSheetByName(SHEETS.MEMBERS);
+  const interestSheet = ss.getSheetByName(SHEETS.INTEREST);
+  const ledgerSheet = getSheet(SHEETS.LEDGER);
+  
+  ledgerSheet.clear();
+  ledgerSheet.clearConditionalFormatRules();
+  
+  // Get member details
+  const memberData = memberSheet.getDataRange().getValues();
+  let memberName = '';
+  let memberAddress = '';
+  for (let i = 1; i < memberData.length; i++) {
+    if (memberData[i][0] == memberId) {
+      memberName = memberData[i][1];
+      memberAddress = memberData[i][3] || '';
+      break;
+    }
+  }
+  
+  // Get transactions
+  const txnData = txnSheet.getDataRange().getValues();
+  const headers = txnData[0];
+  const colMap = {};
+  headers.forEach((h, i) => {
+    if (h) colMap[h.toString().trim()] = i;
+  });
+  const voucherCol = getVoucherColumn(headers);
+  
+  // Build combined entries (transactions + interest)
+  const allEntries = [];
+  
+  // Add transactions
+  for (let i = 1; i < txnData.length; i++) {
+    if (txnData[i][colMap['Member ID']] == memberId) {
+      const vType = txnData[i][voucherCol];
+      if (vType && !vType.toString().includes('Interest')) {
+        const txnDate = parseDate(txnData[i][colMap['Date']]);
+        allEntries.push({
+          date: txnDate,
+          type: vType.toString().trim(),
+          debit: parseFloat(txnData[i][colMap['Debit']] || 0),
+          credit: parseFloat(txnData[i][colMap['Credit']] || 0),
+          interest: 0,
+          narration: txnData[i][colMap['Narration']] || '',
+          isInterest: false
+        });
+      }
+    }
+  }
+  
+  // Add interest entries
+  if (interestSheet) {
+    const intData = interestSheet.getDataRange().getValues();
+    for (let i = 1; i < intData.length; i++) {
+      if (intData[i][0] == memberId) {
+        const intDate = parseDate(intData[i][7]); // Date column
+        const intAmount = parseFloat(intData[i][4] || 0); // Interest Amount
+        const rate = intData[i][5]; // Rate
+        
+        allEntries.push({
+          date: intDate,
+          type: 'Interest',
+          debit: 0,
+          credit: 0,
+          interest: intAmount,
+          narration: `Interest @${rate}%`,
+          isInterest: true
+        });
+      }
+    }
+  }
+  
+  // Sort by date
+  allEntries.sort((a, b) => {
+    if (a.date.getTime() === b.date.getTime()) {
+      // Put transactions before interest on same date
+      return a.isInterest ? 1 : -1;
+    }
+    return a.date - b.date;
+  });
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TALLY AUDIT FORMAT LEDGER
+  // ═══════════════════════════════════════════════════════════════
+  
+  // Header Section
+  ledgerSheet.appendRow(['LEDGER ACCOUNT']);
+  ledgerSheet.appendRow(['']);
+  ledgerSheet.appendRow(['Name:', memberName, '', 'ID:', memberId]);
+  ledgerSheet.appendRow(['Address:', memberAddress]);
+  ledgerSheet.appendRow(['']);
+  ledgerSheet.appendRow(['']);
+  
+  // Column Headers - Tally Format
+  ledgerSheet.appendRow([
+    'Sl.No', 'Date', 'Particulars', 'Vch Type', 'Debit (Dr)', 'Credit (Cr)', 'Interest', 'Balance', 'Narration'
+  ]);
+  
+  let runningBalance = 0;
+  let totalDebit = 0;      // Total Loans (Principal + Top-up)
+  let totalCredit = 0;     // Total Repayments
+  let totalInterest = 0;   // Total Interest
+  let sno = 0;
+  let firstLoanDate = null;
+  let lastPaymentDate = null;
+  
+  // Add opening balance row
+  ledgerSheet.appendRow([
+    '', '', 'Opening Balance', '', '', '', '', formatCurrency(0), ''
+  ]);
+  
+  // Transaction rows
+  for (const entry of allEntries) {
+    sno++;
+    
+    if (entry.isInterest) {
+      // Interest entry - adds to balance
+      totalInterest += entry.interest;
+      runningBalance += entry.interest;
+      
+      ledgerSheet.appendRow([
+        sno,
+        formatDate(entry.date),
+        'Interest Charged',
+        'Interest',
+        '',
+        '',
+        formatCurrency(entry.interest),
+        formatCurrency(runningBalance),
+        entry.narration
+      ]);
+    } else if (entry.type === 'Loan') {
+      // Loan/Top-up - Debit (increases balance)
+      totalDebit += entry.debit;
+      runningBalance += entry.debit;
+      if (!firstLoanDate) firstLoanDate = entry.date;
+      
+      ledgerSheet.appendRow([
+        sno,
+        formatDate(entry.date),
+        entry.narration || 'Loan Given',
+        entry.narration === 'Top-up' ? 'Top-up' : 'Loan',
+        formatCurrency(entry.debit),
+        '',
+        '',
+        formatCurrency(runningBalance),
+        entry.narration
+      ]);
+    } else if (entry.type === 'Payment') {
+      // Payment - Credit (decreases balance)
+      totalCredit += entry.credit;
+      runningBalance -= entry.credit;
+      lastPaymentDate = entry.date;
+      if (runningBalance < 0) runningBalance = 0;
+      
+      ledgerSheet.appendRow([
+        sno,
+        formatDate(entry.date),
+        'Repayment Received',
+        'Payment',
+        '',
+        formatCurrency(entry.credit),
+        '',
+        formatCurrency(runningBalance),
+        entry.narration
+      ]);
+    }
+  }
+  
+  // Totals Section
+  ledgerSheet.appendRow(['']);
+  ledgerSheet.appendRow([
+    '', '', '', 'TOTALS',
+    formatCurrency(totalDebit),
+    formatCurrency(totalCredit),
+    formatCurrency(totalInterest),
+    '',
+    ''
+  ]);
+  
+  // Total Due Calculation
+  const totalDue = totalDebit - totalCredit + totalInterest;
+
+  // Account Summary - Tally Style
+  const summaryStartRow = ledgerSheet.getLastRow() + 2;
+  ledgerSheet.appendRow(['']);
+  ledgerSheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════']);
+  ledgerSheet.appendRow(['', '', '', 'ACCOUNT SUMMARY', '', '', '', '', '']);
+  ledgerSheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════']);
+  ledgerSheet.appendRow(['', '', '', 'First Loan Date:', '', formatDate(firstLoanDate), '', '', '']);
+  ledgerSheet.appendRow(['', '', '', 'Last Repayment Date:', '', formatDate(lastPaymentDate) || 'No Payments', '', '', '']);
+  ledgerSheet.appendRow(['', '', '', 'Total Principal Given (Dr)', '', formatCurrency(totalDebit), '', '', '']);
+  ledgerSheet.appendRow(['', '', '', 'Total Repayment Received (Cr)', '', formatCurrency(totalCredit), '', '', '']);
+  ledgerSheet.appendRow(['', '', '', 'Interest paid:', '', formatCurrency(totalInterest), '', '', '']);
+  ledgerSheet.appendRow(['───────────────────────────────────────────────────────────────────────────────────────']);
+  ledgerSheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════']);
+  
+  if (totalDue <= 0) {
+    ledgerSheet.appendRow(['', '', '', 'STATUS:', '', 'BALANCE: ZERO', '', '', '']);
+  } else {
+    ledgerSheet.appendRow(['', '', '', 'TOTAL AMOUNT DUE', '', formatCurrency(totalDue), '', '', '']);
+  }
+  ledgerSheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════']);
+  
+  const summaryEndRow = ledgerSheet.getLastRow();
+  // Highlight summary in Green
+  ledgerSheet.getRange(summaryStartRow, 1, summaryEndRow - summaryStartRow + 1, 9).setBackground('#C6EFCE');
+  ledgerSheet.getRange(summaryStartRow, 4, summaryEndRow - summaryStartRow + 1, 2).setFontWeight('bold');
+  
+  // Closing balance
+  ledgerSheet.appendRow(['']);
+  ledgerSheet.appendRow(['', '', 'Closing Balance', '', '', '', '', formatCurrency(runningBalance), 'As on ' + formatDate(new Date())]);
+  
+  // ═══════════════════════════════════════════════════════════════
+  // FORMATTING - TALLY STYLE
+  // ═══════════════════════════════════════════════════════════════
+  
+  // Title formatting
+  ledgerSheet.getRange('A1').setFontWeight('bold').setFontSize(16).setBackground('#1a73e8').setFontColor('white');
+  ledgerSheet.getRange('A1:I1').merge();
+  
+  // Member info
+  ledgerSheet.getRange('A3:A4').setFontWeight('bold');
+  ledgerSheet.getRange('D3').setFontWeight('bold');
+  
+  // Column headers
+  const headerRow = 7;
+  ledgerSheet.getRange(headerRow, 1, 1, 9).setFontWeight('bold').setBackground('#4285F4').setFontColor('white').setHorizontalAlignment('center');
+  
+  // Find totals row and format
+  const lastRow = ledgerSheet.getLastRow();
+  
+  // Summary section formatting
+  for (let r = 1; r <= lastRow; r++) {
+    const cellValue = ledgerSheet.getRange(r, 4).getValue();
+    if (cellValue === 'TOTALS') {
+      ledgerSheet.getRange(r, 1, 1, 9).setFontWeight('bold').setBackground('#e8f0fe');
+    }
+    if (cellValue === 'TOTAL AMOUNT DUE') {
+      ledgerSheet.getRange(r, 1, 1, 9).setFontWeight('bold').setBackground('#c6efce').setFontSize(12);
+    }
+    if (cellValue === 'ACCOUNT SUMMARY') {
+      ledgerSheet.getRange(r, 1, 1, 9).setFontWeight('bold').setHorizontalAlignment('center');
+    }
+  }
+  
+  // Auto-resize columns
+  for (let i = 1; i <= 9; i++) {
+    ledgerSheet.autoResizeColumn(i);
+  }
+  
+  // Set column widths
+  ledgerSheet.setColumnWidth(1, 50);  // S.No
+  ledgerSheet.setColumnWidth(2, 100); // Date
+  ledgerSheet.setColumnWidth(3, 150); // Particulars
+  ledgerSheet.setColumnWidth(4, 80);  // Vch Type
+  ledgerSheet.setColumnWidth(5, 120); // Debit
+  ledgerSheet.setColumnWidth(6, 120); // Credit
+  ledgerSheet.setColumnWidth(7, 100); // Interest
+  ledgerSheet.setColumnWidth(8, 120); // Balance
+  ledgerSheet.setColumnWidth(9, 150); // Narration
+  
+  SpreadsheetApp.getUi().alert('✅ Ledger generated in Tally format!\n\nView "Ledger" tab.');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GENERATE ALL MEMBERS LEDGER - TALLY FORMAT
+// ═══════════════════════════════════════════════════════════════
+
+function generateAllMembersLedger() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  const response = ui.alert(
+    'Generate All Members Ledger',
+    'This will create ledgers for ALL members in Tally format.\n\n' +
+    'This may take a minute.\n\n' +
+    'Continue?',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (response !== ui.Button.YES) return;
+  
+  const allLedgerSheet = getSheet(SHEETS.ALL_LEDGERS);
+  allLedgerSheet.clear();
+  allLedgerSheet.clearConditionalFormatRules();
+  
+  const txnSheet = ss.getSheetByName(SHEETS.TRANSACTIONS);
+  const memberSheet = ss.getSheetByName(SHEETS.MEMBERS);
+  const interestSheet = ss.getSheetByName(SHEETS.INTEREST);
+  
+  const memberData = memberSheet.getDataRange().getValues().slice(1);
+  const txnData = txnSheet.getDataRange().getValues();
+  const headers = txnData[0];
+  
+  const colMap = {};
+  headers.forEach((h, i) => {
+    if (h) colMap[h.toString().trim()] = i;
+  });
+  const voucherCol = getVoucherColumn(headers);
+  
+  // Get interest data
+  let interestByMember = {};
+  let interestEntriesByMember = {};
+  if (interestSheet) {
+    const intData = interestSheet.getDataRange().getValues();
+    for (let i = 1; i < intData.length; i++) {
+      const mid = intData[i][0];
+      if (!interestByMember[mid]) {
+        interestByMember[mid] = 0;
+        interestEntriesByMember[mid] = [];
+      }
+      interestByMember[mid] += parseFloat(intData[i][4] || 0);
+      interestEntriesByMember[mid].push({
+        date: parseDate(intData[i][7]),
+        amount: parseFloat(intData[i][4] || 0),
+        rate: intData[i][5]
+      });
+    }
+  }
+  
+  // Title
+  allLedgerSheet.appendRow(['ALL MEMBERS LEDGER']);
+  allLedgerSheet.getRange('A1').setFontWeight('bold').setFontSize(18).setBackground('#1a73e8').setFontColor('white');
+  allLedgerSheet.getRange('A1:I1').merge();
+  
+  allLedgerSheet.appendRow(['Generated on: ' + formatDate(new Date())]);
+  allLedgerSheet.appendRow(['']);
+  
+  let memberCount = 0;
+  let grandDebit = 0, grandCredit = 0, grandInterest = 0, grandDue = 0;
+  
+  for (const member of memberData) {
+    const memberId = member[0];
+    const memberName = member[1];
+    
+    if (!memberId) continue;
+    
+    // Get member transactions
+    const memberTxns = [];
+    for (let i = 1; i < txnData.length; i++) {
+      if (txnData[i][colMap['Member ID']] == memberId) {
+        const vType = txnData[i][voucherCol];
+        if (vType && !vType.toString().includes('Interest')) {
+          memberTxns.push({
+            date: parseDate(txnData[i][colMap['Date']]),
+            type: vType.toString().trim(),
+            debit: parseFloat(txnData[i][colMap['Debit']] || 0),
+            credit: parseFloat(txnData[i][colMap['Credit']] || 0),
+            narration: txnData[i][colMap['Narration']] || '',
+            isInterest: false
+          });
+        }
+      }
+    }
+    
+    if (memberTxns.length === 0) continue;
+    
+    // Add interest entries
+    const intEntries = interestEntriesByMember[memberId] || [];
+    for (const ie of intEntries) {
+      memberTxns.push({
+        date: ie.date,
+        type: 'Interest',
+        debit: 0,
+        credit: 0,
+        interest: ie.amount,
+        narration: `Interest @${ie.rate}%`,
+        isInterest: true
+      });
+    }
+    
+    memberTxns.sort((a, b) => {
+      if (a.date.getTime() === b.date.getTime()) {
+        return a.isInterest ? 1 : -1;
+      }
+      return a.date - b.date;
+    });
+    
+    // Member header
+    allLedgerSheet.appendRow([`${memberName} (ID: ${memberId})`]);
+    const memberHeaderRow = allLedgerSheet.getLastRow();
+    allLedgerSheet.getRange(memberHeaderRow, 1, 1, 9).merge().setFontWeight('bold').setFontSize(12).setBackground('#e8f0fe');
+    
+    // Column headers
+    allLedgerSheet.appendRow(['Sl.No', 'Date', 'Particulars', 'Vch Type', 'Debit (Dr)', 'Credit (Cr)', 'Interest', 'Balance', 'Narration']);
+    const colHeaderRow = allLedgerSheet.getLastRow();
+    allLedgerSheet.getRange(colHeaderRow, 1, 1, 9).setFontWeight('bold').setBackground('#d0e0f0').setFontSize(10);
+    
+    // Transactions
+    let runningBalance = 0;
+    let totalDebit = 0;
+    let totalCredit = 0;
+    let totalInterest = 0;
+    let sno = 0;
+    let firstLoanDate = null;
+    let lastPaymentDate = null;
+    
+    for (const entry of memberTxns) {
+      sno++;
+      
+      if (entry.isInterest) {
+        totalInterest += entry.interest;
+        runningBalance += entry.interest;
+        
+        allLedgerSheet.appendRow([
+          sno, formatDate(entry.date), 'Interest Charged', 'Interest',
+          '', '', formatCurrency(entry.interest), formatCurrency(runningBalance), entry.narration
+        ]);
+      } else if (entry.type === 'Loan') {
+        totalDebit += entry.debit;
+        runningBalance += entry.debit;
+        if (!firstLoanDate) firstLoanDate = entry.date;
+        
+        allLedgerSheet.appendRow([
+          sno, formatDate(entry.date), entry.narration || 'Loan', entry.narration === 'Top-up' ? 'Top-up' : 'Loan',
+          formatCurrency(entry.debit), '', '', formatCurrency(runningBalance), entry.narration
+        ]);
+      } else if (entry.type === 'Payment') {
+        totalCredit += entry.credit;
+        runningBalance -= entry.credit;
+        lastPaymentDate = entry.date;
+        if (runningBalance < 0) runningBalance = 0;
+        
+        allLedgerSheet.appendRow([
+          sno, formatDate(entry.date), 'Repayment', 'Payment',
+          '', formatCurrency(entry.credit), '', formatCurrency(runningBalance), entry.narration
+        ]);
+      }
+    }
+    
+    // Member summary
+    const principalDue = Math.max(0, totalDebit - totalCredit);
+    const totalDue = principalDue + totalInterest;
+    const summaryStartRow = allLedgerSheet.getLastRow() + 1;
+    
+    allLedgerSheet.appendRow(['', '', '', 'TOTALS', formatCurrency(totalDebit), formatCurrency(totalCredit), formatCurrency(totalInterest), '', '']);
+    allLedgerSheet.appendRow(['', '', '', 'First Loan Date:', formatDate(firstLoanDate), '', '', '', '']);
+    allLedgerSheet.appendRow(['', '', '', 'Last Repayment Date:', formatDate(lastPaymentDate) || 'No Payments', '', '', '', '']);
+    allLedgerSheet.appendRow(['', '', '', 'Principal Due:', formatCurrency(principalDue), '', '', '', '']);
+    // Interest row removed as per user request
+    
+    if (totalDue <= 0) {
+      allLedgerSheet.appendRow(['', '', '', 'STATUS:', 'BALANCE: ZERO', '', '', '', '']);
+    } else {
+      allLedgerSheet.appendRow(['', '', '', 'TOTAL DUE:', formatCurrency(totalDue), '', '', '', '']);
+    }
+    
+    const summaryEndRow = allLedgerSheet.getLastRow();
+    // Highlight summary in Green
+    allLedgerSheet.getRange(summaryStartRow, 1, summaryEndRow - summaryStartRow + 1, 9).setBackground('#C6EFCE');
+    allLedgerSheet.getRange(summaryStartRow, 4, summaryEndRow - summaryStartRow + 1, 2).setFontWeight('bold');
+    
+    // Spacer
+    allLedgerSheet.appendRow(['']);
+    allLedgerSheet.appendRow(['─'.repeat(100)]);
+    allLedgerSheet.appendRow(['']);
+    
+    memberCount++;
+    grandDebit += totalDebit;
+    grandCredit += totalCredit;
+    grandInterest += totalInterest;
+    grandDue += totalDue;
+  }
+  
+  // Grand totals
+  allLedgerSheet.appendRow(['']);
+  allLedgerSheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']);
+  allLedgerSheet.appendRow(['', '', '', 'GRAND TOTALS (' + memberCount + ' Members)', formatCurrency(grandDebit), formatCurrency(grandCredit), formatCurrency(grandInterest), '', '']);
+  allLedgerSheet.appendRow(['', '', '', 'TOTAL AMOUNT DUE', formatCurrency(grandDue), '', '', '', '']);
+  allLedgerSheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']);
+  
+  const grandRow = allLedgerSheet.getLastRow();
+  allLedgerSheet.getRange(grandRow - 1, 4, 1, 2).setFontWeight('bold').setFontSize(12).setBackground('#c6efce');
+  
+  // Auto-resize
+  for (let i = 1; i <= 9; i++) {
+    allLedgerSheet.autoResizeColumn(i);
+  }
+  
+  ui.alert(`✅ All Members Ledger Generated!\n\n• ${memberCount} members\n• Total Due: ${formatCurrency(grandDue)}\n\nView "All Members Ledger" tab.`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SUMMARY REPORT - TALLY FORMAT
+// ═══════════════════════════════════════════════════════════════
+
+function showSummaryReport() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const memberSheet = ss.getSheetByName(SHEETS.MEMBERS);
+  const txnSheet = ss.getSheetByName(SHEETS.TRANSACTIONS);
+  const interestSheet = ss.getSheetByName(SHEETS.INTEREST);
+  const summarySheet = getSheet(SHEETS.SUMMARY);
+  
+  summarySheet.clear();
+  
+  // Tally-style header
+  summarySheet.appendRow(['LOAN SUMMARY REPORT']);
+  summarySheet.appendRow(['']);
+  summarySheet.appendRow(['Report Date:', formatDate(new Date())]);
+  summarySheet.appendRow(['']);
+  summarySheet.appendRow(['']);
+  
+  // Column headers
+  summarySheet.appendRow([
+    'S.No', 'ID', 'Member Name', 'Total Loans (Dr)', 'Total Paid (Cr)', 'Principal Due', 'Interest Due', 'Total Due'
+  ]);
+  
+  const memberData = memberSheet.getDataRange().getValues().slice(1);
+  const txnData = txnSheet.getDataRange().getValues();
+  
+  const headers = txnData[0];
+  const colMap = {};
+  headers.forEach((h, i) => {
+    if (h) colMap[h.toString().trim()] = i;
+  });
+  const voucherCol = getVoucherColumn(headers);
+  
+  // Get interest totals
+  let interestByMember = {};
+  if (interestSheet) {
+    const intData = interestSheet.getDataRange().getValues();
+    for (let i = 1; i < intData.length; i++) {
+      const mid = intData[i][0];
+      if (!interestByMember[mid]) interestByMember[mid] = 0;
+      interestByMember[mid] += parseFloat(intData[i][4] || 0);
+    }
+  }
+  
+  let grandLoans = 0, grandPaid = 0, grandPrincipal = 0, grandInterest = 0, grandTotal = 0;
+  let memberCount = 0;
+  let sno = 0;
+  
+  for (const member of memberData) {
+    const memberId = member[0];
+    const memberName = member[1];
+    
+    if (!memberId) continue;
+    
+    let totalLoans = 0, totalPaid = 0;
+    
+    for (let i = 1; i < txnData.length; i++) {
+      const row = txnData[i];
+      if (row[colMap['Member ID']] == memberId) {
+        const voucherType = row[voucherCol];
+        if (!voucherType || voucherType.toString().includes('Interest')) continue;
+        
+        const debit = parseFloat(row[colMap['Debit']] || 0);
+        const credit = parseFloat(row[colMap['Credit']] || 0);
+        
+        if (voucherType.toString().trim() === 'Loan') {
+          totalLoans += debit;
+        } else if (voucherType.toString().trim() === 'Payment') {
+          totalPaid += credit;
+        }
+      }
+    }
+    
+    const principal = totalLoans - totalPaid;
+    const totalInterest = interestByMember[memberId] || 0;
+    const totalDue = principal + totalInterest;
+    
+    if (totalLoans > 0 || totalPaid > 0) {
+      sno++;
+      summarySheet.appendRow([
+        sno,
+        memberId,
+        memberName,
+        formatCurrency(totalLoans),
+        formatCurrency(totalPaid),
+        formatCurrency(principal),
+        formatCurrency(totalInterest),
+        formatCurrency(totalDue)
+      ]);
+      
+      grandLoans += totalLoans;
+      grandPaid += totalPaid;
+      grandPrincipal += principal;
+      grandInterest += totalInterest;
+      grandTotal += totalDue;
+      memberCount++;
+    }
+  }
+  
+  // Totals
+  summarySheet.appendRow(['']);
+  summarySheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']);
+  summarySheet.appendRow([
+    '', '', 'GRAND TOTAL (' + memberCount + ' Members)',
+    formatCurrency(grandLoans),
+    formatCurrency(grandPaid),
+    formatCurrency(grandPrincipal),
+    formatCurrency(grandInterest),
+    formatCurrency(grandTotal)
+  ]);
+  summarySheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']);
+  
+  // Formatting
+  summarySheet.getRange('A1').setFontWeight('bold').setFontSize(18).setBackground('#1a73e8').setFontColor('white');
+  summarySheet.getRange('A1:H1').merge();
+  
+  summarySheet.getRange('A6:H6').setFontWeight('bold').setBackground('#4285F4').setFontColor('white');
+  
+  const lastRow = summarySheet.getLastRow();
+  summarySheet.getRange(lastRow - 1, 1, 1, 8).setFontWeight('bold').setBackground('#c6efce');
+  
+  for (let i = 1; i <= 8; i++) {
+    summarySheet.autoResizeColumn(i);
+  }
+  
+  SpreadsheetApp.getUi().alert(`✅ Summary Report generated!\n\n• ${memberCount} members\n• Total Due: ${formatCurrency(grandTotal)}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETTINGS & HELP
+// ═══════════════════════════════════════════════════════════════
+
+function showSettings() {
+  const ui = SpreadsheetApp.getUi();
+  const helpText = `
+╔═══════════════════════════════════════════════════════════╗
+║               LOAN MANAGER v3.0 - HELP                    ║
+╠═══════════════════════════════════════════════════════════╣
+║                                                           ║
+║  📊 INTEREST CALCULATION RULE:                            ║
+║  • Loan taken in Jan → Interest starts from Feb           ║
+║  • Interest calculated on opening balance each month      ║
+║  • Use "Interest Days" column for pro-rata calculation    ║
+║                                                           ║
+║  📁 TAB STRUCTURE:                                        ║
+║  • Members - Member details (you manage)                  ║
+║  • Transactions - Loans & Payments only (you manage)      ║
+║  • Interest Rate Config - Rates (you manage)              ║
+║  • Interest Details - Auto-generated interest             ║
+║  • Ledger - Single member statement (Tally format)        ║
+║  • All Members Ledger - Everyone's statement              ║
+║  • Summary - Overview report                              ║
+║                                                           ║
+║  📝 VOUCHER TYPES IN TRANSACTIONS:                        ║
+║  • "Loan" - For new loan or top-up (Debit column)         ║
+║  • "Payment" - For repayment (Credit column)              ║
+║                                                           ║
+║  📝 INTEREST DAYS (Pro-rata):                             ║
+║  • Leave blank = No interest in loan month                ║
+║  • Enter 15 = 15 days interest in loan month              ║
+║  • Enter 20 = 20 days interest in loan month              ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+  `;
+  
+  ui.alert('Settings & Help', helpText, ui.ButtonSet.OK);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DEBUG FUNCTION
+// ═══════════════════════════════════════════════════════════════
+
+function debugCheckData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  
+  let report = "=== DEBUG REPORT ===\n\n";
+  
+  const memberSheet = ss.getSheetByName('Members');
+  if (memberSheet) {
+    const memberData = memberSheet.getDataRange().getValues();
+    report += "✅ Members: " + (memberData.length - 1) + " members\n";
+  } else {
+    report += "❌ Members sheet NOT FOUND!\n";
+  }
+  
+  const txnSheet = ss.getSheetByName('Transactions');
+  if (txnSheet) {
+    const txnData = txnSheet.getDataRange().getValues();
+    report += "✅ Transactions: " + (txnData.length - 1) + " entries\n";
+    report += "   Headers: " + JSON.stringify(txnData[0]) + "\n";
+  } else {
+    report += "❌ Transactions sheet NOT FOUND!\n";
+  }
+  
+  const rateSheet = ss.getSheetByName('Interest Rate Config');
+  if (rateSheet) {
+    const rateData = rateSheet.getDataRange().getValues();
+    report += "✅ Interest Rates: " + (rateData.length - 1) + " rate periods\n";
+  } else {
+    report += "❌ Interest Rate Config NOT FOUND!\n";
+  }
+  
+  const intSheet = ss.getSheetByName('Interest Details');
+  if (intSheet && intSheet.getLastRow() > 1) {
+    report += "✅ Interest Details: " + (intSheet.getLastRow() - 1) + " entries\n";
+  } else {
+    report += "⚠️ Interest Details: Empty (run Generate Interest)\n";
+  }
+  
+  const htmlOutput = HtmlService.createHtmlOutput(
+    '<pre style="font-family: monospace; font-size: 14px; padding: 20px;">' + report + '</pre>'
+  ).setWidth(600).setHeight(400);
+  
+  ui.showModalDialog(htmlOutput, 'Debug Report');
+}
