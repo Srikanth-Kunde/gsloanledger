@@ -1,0 +1,40 @@
+# Loan Management System (Google Apps Script)
+
+A comprehensive loan tracking and interest calculation system built on Google Sheets and Apps Script.
+
+## 🚀 Navigation & Features
+
+### 📋 All Members Ledger (With Index)
+Professional batch reporting with a built-in **Navigation Index**.
+- **Quick Jump**: Click any member name in the index at the top to jump directly to their ledger.
+- **Back to Index**: Use the "⬆️ Back to Index" link in each member's summary to return to the top.
+- **Account Summary**: Synchronized green summary blocks for every member.
+
+### 📋 Single Member Ledger
+Detailed individual statements in Tally format.
+- Includes **Principal-Only Balance** tracking.
+- Green highlighted **Account Summary** with key loan dates.
+
+### 🔄 Interest Engine
+- Automated monthly interest generation with configurable rates.
+- **Strict Cut-off**: Calculations stop at **31-01-2026**.
+- **Pro-rata Support**: Supports partial months via "Interest Days".
+
+## 📁 Sheet Structure
+- **Members**: Master list of member IDs, names, and contact details.
+- **Transactions**: Log of all "Loan" and "Payment" voucher types.
+- **Interest Rate Config**: Time-based interest rates.
+- **Interest Details**: Auto-generated monthly interest logs.
+- **Ledger / All Members Ledger**: The Tally-style reporting outputs.
+- **Summary**: High-level cross-member dues dashboard.
+
+## 🛠️ Setup & Usage
+1. Manage your members in the **Members** tab.
+2. Record loans and payments in the **Transactions** tab.
+3. Access all functions through the **📊 Loan Manager** custom menu.
+4. Run **"🔄 Generate Interest for All"** periodically to update dues.
+5. Generate ledgers to view individual or batch statements.
+
+---
+*For technical details, see [PRD.md](./PRD.md).*  
+*For a log of recent improvements, see [ChangeTracker.md](./ChangeTracker.md).*
