@@ -1,4 +1,4 @@
-# Loan Management System (Google Apps Script) v4.3
+# Loan Management System (Google Apps Script) v4.5
 
 A comprehensive loan tracking and interest calculation system built on Google Sheets and Apps Script.
 

@@ -520,19 +520,19 @@ function generateLedger(memberId) {
     return a.date - b.date;
   });
   
-  // Header Section
-  ledgerSheet.appendRow(['LEDGER ACCOUNT']);
-  ledgerSheet.appendRow(['']);
-  ledgerSheet.appendRow(['Name:', memberName, '', 'ID:', memberId]);
-  ledgerSheet.appendRow(['Address:', memberAddress]);
-  ledgerSheet.appendRow(['']);
-  ledgerSheet.appendRow(['']);
+  // Header Section - Set Rows correctly
+  ledgerSheet.getRange(1, 1).setValue('LEDGER ACCOUNT');
+  ledgerSheet.getRange(2, 1).setValue('');
+  ledgerSheet.getRange(3, 1).setValue(`Name: ${memberName}      |      Member ID: ${memberId}`);
+  ledgerSheet.getRange(4, 1).setValue(`Address: ${memberAddress || 'N/A'}`);
+  ledgerSheet.getRange(5, 1).setValue('');
+  ledgerSheet.getRange(6, 1).setValue('');
   
   // Column Headers - Tally Format
-  ledgerSheet.appendRow([
+  const headerRow = 7;
+  ledgerSheet.getRange(headerRow, 1, 1, 9).setValues([[
     "'Sl No", 'Date', 'Particulars', 'Vch Type', 'Debit (Dr)', 'Credit (Cr)', 'Interest', 'Balance', 'Narration'
-  ]);
-  const headerRow = ledgerSheet.getLastRow();
+  ]]);
   
   let runningBalance = 0;
   let totalDebit = 0;      // Total Loans (Principal + Top-up)
@@ -615,13 +615,11 @@ function generateLedger(memberId) {
   ledgerSheet.getRange(topRow, 4).setFormula(`=HYPERLINK("${indexUrl}", "⬆️ Back to Top")`).setFontColor('#1a73e8').setFontLine('underline');
   
   // Formatting
-  ledgerSheet.getRange('A1').setFontWeight('bold').setFontSize(18).setBackground('#1a73e8').setFontColor('white');
-  ledgerSheet.getRange('A1:I1').merge();
+  // Header Formatting
+  ledgerSheet.getRange('A1:I1').merge().setFontWeight('bold').setFontSize(18).setBackground('#1a73e8').setFontColor('white');
   ledgerSheet.getRange('A2:I2').merge();
-  ledgerSheet.getRange('A3:C3').merge();
-  ledgerSheet.getRange('D3:E3').merge();
-  ledgerSheet.getRange('A3:A4').setFontWeight('bold');
-  ledgerSheet.getRange('D3').setFontWeight('bold');
+  ledgerSheet.getRange('A3:I3').merge().setFontWeight('bold');
+  ledgerSheet.getRange('A4:I4').merge();
   ledgerSheet.getRange(headerRow, 1, 1, 9).setFontWeight('bold').setBackground('#4285F4').setFontColor('white').setHorizontalAlignment('center');
   
   const lastRow = ledgerSheet.getLastRow();
@@ -635,6 +633,7 @@ function generateLedger(memberId) {
   for (let i = 1; i <= 9; i++) {
     ledgerSheet.autoResizeColumn(i);
   }
+  ledgerSheet.setColumnWidth(1, 50); // Explicit Sl No width
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -942,18 +941,27 @@ function showSummaryReport() {
     }
   }
   
+  const lastDataRow = summarySheet.getLastRow();
   summarySheet.appendRow(['']);
+  const separator1Row = lastDataRow + 2;
   summarySheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']);
+  summarySheet.getRange(separator1Row, 1, 1, 10).merge();
+
   summarySheet.appendRow(['', '', 'GRAND TOTAL (' + memberCount + ' Members)', '', formatCurrency(grandLoans), formatCurrency(grandPaid), formatCurrency(grandPrincipal), formatCurrency(grandInterest), '', formatCurrency(grandTotal)]);
+  const grandTotalRow = lastDataRow + 3;
+  summarySheet.getRange(grandTotalRow, 1, 1, 10).setFontWeight('bold').setBackground('#c6efce');
+
+  const separator2Row = lastDataRow + 4;
   summarySheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']);
+  summarySheet.getRange(separator2Row, 1, 1, 10).merge();
   
-  summarySheet.getRange('A1').setFontWeight('bold').setFontSize(18).setBackground('#1a73e8').setFontColor('white');
-  summarySheet.getRange('A1:J1').merge();
+  // Final Formatting
+  summarySheet.getRange('A1:J1').merge().setFontWeight('bold').setFontSize(18).setBackground('#1a73e8').setFontColor('white');
   summarySheet.getRange(headerRow, 1, 1, 10).setFontWeight('bold').setBackground('#4285F4').setFontColor('white');
-  const lastRow = summarySheet.getLastRow();
-  summarySheet.getRange(lastRow - 1, 1, 1, 10).setFontWeight('bold').setBackground('#c6efce');
   
   for (let i = 1; i <= 10; i++) summarySheet.autoResizeColumn(i);
+  summarySheet.setColumnWidth(1, 50); // Explicit Sl No width
+  
   SpreadsheetApp.getUi().alert(`✅ Summary Report generated!`);
 }
 

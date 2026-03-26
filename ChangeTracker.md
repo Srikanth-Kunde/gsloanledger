@@ -2,6 +2,13 @@
 
 A chronological record of project enhancements, refactorings, and bug fixes.
 
+## [v4.5] - 2026-03-26
+### Fixed
+- **Header Data Integrity**: Restructured the Single Member Ledger header to merge ranges *before* setting combined value strings, preventing Google Sheets from discarding Member Name/ID data.
+- **Universal Column Width Enforcement**: Implemented explicit `setColumnWidth(1, 50)` across all reporting modules (Summary, Single Ledger, All Ledger) to ensure a consistent, compact "Sl No" column.
+- **Separator Row Merging**: Synchronized the merging of decorative separator rows in the Summary Report to mirror the fix in the member ledgers, resolving unintended layout expansion.
+- **Enhanced Account Summary**: Finalized the inclusion of **Member Name** and **Member ID** in all green summary blocks for 10x traceability.
+
 ## [v4.4] - 2026-03-26
 ### Added
 - **Improved Layouts**: Merged decorative separator rows across all columns in **Summary Report**, **Single Ledger**, and **Batch Ledger** to prevent unintended column expansion.
