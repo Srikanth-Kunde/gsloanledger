@@ -192,7 +192,7 @@ function generateInterestForMember(memberId, memberName, upToDate, ratesData, tx
   );
   
   for (const txn of firstMonthTxns) {
-    if (txn.voucherType === 'Loan') {
+    if (txn.voucherType === 'Loan' || txn.voucherType === 'Top-up') {
       principalBalance += txn.debit;
     } else if (txn.voucherType === 'Payment') {
       principalBalance -= txn.credit;
@@ -222,7 +222,7 @@ function generateInterestForMember(memberId, memberName, upToDate, ratesData, tx
     );
     
     for (const txn of monthTxns) {
-      if (txn.voucherType === 'Loan') {
+      if (txn.voucherType === 'Loan' || txn.voucherType === 'Top-up') {
         // New loan - add to principal but NO interest this month
         // Interest on this new loan will start from NEXT month
         principalBalance += txn.debit;
@@ -570,7 +570,7 @@ function generateLedger(memberId) {
         formatCurrency(runningBalance),
         entry.narration
       ]);
-    } else if (entry.type === 'Loan') {
+    } else if (entry.type === 'Loan' || entry.type === 'Top-up') {
       // Loan/Top-up - Debit (increases balance)
       totalDebit += entry.debit;
       runningBalance += entry.debit;
@@ -580,7 +580,7 @@ function generateLedger(memberId) {
         sno,
         formatDate(entry.date),
         entry.narration || 'Loan Given',
-        entry.narration === 'Top-up' ? 'Top-up' : 'Loan',
+        entry.type,
         formatCurrency(entry.debit),
         '',
         '',
@@ -857,14 +857,21 @@ function generateAllMembersLedger() {
           sno, formatDate(entry.date), 'Interest Charged', 'Interest',
           '', '', formatCurrency(entry.interest), formatCurrency(runningBalance), entry.narration
         ]);
-      } else if (entry.type === 'Loan') {
+      } else if (entry.type === 'Loan' || entry.type === 'Top-up') {
         totalDebit += entry.debit;
         runningBalance += entry.debit;
         if (!firstLoanDate) firstLoanDate = entry.date;
         
         allLedgerSheet.appendRow([
-          sno, formatDate(entry.date), entry.narration || 'Loan', entry.narration === 'Top-up' ? 'Top-up' : 'Loan',
-          formatCurrency(entry.debit), '', '', formatCurrency(runningBalance), entry.narration
+          sno, 
+          formatDate(entry.date), 
+          entry.narration || 'Loan', 
+          entry.type,
+          formatCurrency(entry.debit), 
+          '', 
+          '', 
+          formatCurrency(runningBalance), 
+          entry.narration
         ]);
       } else if (entry.type === 'Payment') {
         totalCredit += entry.credit;
@@ -1063,10 +1070,11 @@ function showSummaryReport() {
         const debit = parseFloat(row[colMap['Debit']] || 0);
         const credit = parseFloat(row[colMap['Credit']] || 0);
         
-        if (voucherType.toString().trim() === 'Loan') {
+        const vType = voucherType.toString().trim();
+        if (vType === 'Loan' || vType === 'Top-up') {
           totalLoans += debit;
           if (!firstLoanDate || txnDate < firstLoanDate) firstLoanDate = txnDate;
-        } else if (voucherType.toString().trim() === 'Payment') {
+        } else if (vType === 'Payment') {
           totalPaid += credit;
           if (!lastRepaymentDate || txnDate > lastRepaymentDate) lastRepaymentDate = txnDate;
         }

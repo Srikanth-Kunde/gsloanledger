@@ -7,14 +7,14 @@ A Google Apps Script-based loan tracking and interest calculation engine designe
 - **Member Management**: Track member IDs, names, addresses, and loan history.
 - **Automated Interest Engine**: Generate monthly interest entries based on configurable rates.
 - **Tally-style Ledgers**: Professional single-member and batch-member reports.
-- **Summary Reports**: High-level overview of total principal, interest, and dues across all members.
+- **Summary Dashboard**: 10-column high-level overview including `First Loan Date`, `Last Repayment Date`, and `Interest Charged` for total audit visibility.
 - **Navigation Index**: Clickable Table of Contents for batch ledgers to quickly jump to any member.
 
 ## 3. Financial Calculation Rules
-- **Interest Cycle**: Interest starts accruing from the month *following* the loan (e.g., Jan loan → Feb interest).
-- **Principal-Only Balance**: The "Balance" column in ledgers tracks only the principal amount (Loans - Repayments).
+- **Interest Cycle**: Interest starts accruing from the month *following* the loan or top-up (e.g., Jan → Feb interest).
+- **Principal-Only Balance**: The "Balance" column in ledgers tracks only the principal amount (Loans + Top-ups - Repayments).
 - **Interst Pro-rata**: Supports "Interest Days" for partial-month interest on new loans or top-ups.
-- **Strict Cut-off**: All calculations stop at a hardcoded cut-off date of **January 31, 2026**.
+- **Strict Cut-off**: All calculations (Loans, Payments, and Interest) stop at a hardcoded cut-off date of **January 31, 2026**. Data after this date is ignored in all reports.
 - **Interest Accrual**: Calculated as simple interest on the outstanding principal balance each month.
 
 ## 4. UI & Formatting Specifications
@@ -25,4 +25,5 @@ A Google Apps Script-based loan tracking and interest calculation engine designe
     - Total Interest Paid/Accrued.
     - **TOTAL DUE (Principal)** in bold.
 - **Dynamic Headers**: White text on dark blue background (`#4285F4`).
+- **Summary Dashboard Columns**: 10 columns: `Sl no`, `ID`, `Member Name`, `First Loan Date`, `Total Loan(Dr)`, `Total Paid (Cr)`, `Principal Due`, `Interest Charged`, `Last Repayment Date`, and `Total Due`.
 - **Index Navigation**: Clickable member names and "Back to Index" links for batch reports.

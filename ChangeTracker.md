@@ -2,17 +2,19 @@
 
 A chronological record of project enhancements, refactorings, and bug fixes.
 
-## [v4.0] - 2026-03-26
+## [v4.1] - 2026-03-26
 ### Added
-- **Navigation Index**: Clickable Table of Contents at the top of the "All Members Ledger" sheet.
-- **Back to Index**: Jump links added to every member's summary for quick navigation.
-- **Synchronized Summaries**: Uniform "ACCOUNT SUMMARY" block across both single and batch reports.
-- **Fixed "As on" Date**: Reports now explicitly show "As on 31-01-2026" to reflect the cut-off.
+- **Expanded Summary Report**: Now features 10 comprehensive columns including `First Loan Date`, `Last Repayment Date`, and `Interest Charged`.
+- **Global Date Filtering**: Strict January 31, 2026 cut-off now applied to all transaction and interest processing in Summary and Ledger reports.
+- **Top-up Voucher Support**: Expanded logic to treat both 'Loan' and 'Top-up' as debit/loan voucher types across all calculation and reporting engines.
+- **Transactions**: Log of all "Loan", "Top-up", and "Payment" voucher types.
 
 ### Fixed
-- **Principal-Only Balance**: Resolved a bug where interest was inflating the running balance column. Balance now tracks only Principal (Debit - Credit).
-- **Blue Highlight Bug**: Fixed Row 7 styling issue by making header detection dynamic (targeting Row 4).
-- **Hyperlink Fix**: Changed "Sl.No" to "Sl No" (handled as text) to prevent annoying auto-hyperlinks.
+- **Summary Layout**: Redesigned to follow a 3-row header structure (Title, Date, Columns) to match user requirements.
+- **Highlighting Logic**: Fixed a bug where data rows were being highlighted as headers by implementing dynamic row indexing.
+- **Header Cleanliness**: Removed auto-hyperlinking on the "Sl no" column in the Summary report.
+
+## [v4.0] - 2026-03-26
 
 ## [v3.0] - 2026-03-25
 ### Added
@@ -27,6 +29,7 @@ A chronological record of project enhancements, refactorings, and bug fixes.
 ### Added
 - **Tally-Style Ledger Layout**: Professional multi-column reporting.
 - **All Members Ledger**: Batch generation of member statements.
+- **Interest Cycle**: Interest starts accruing from the month *following* the loan (e.g., Jan loan or top-up → Feb interest).
 - **Interest Details Sheet**: Automated logging of monthly interest entries.
 - **Summary Report**: High-level cross-member dashboard.
 

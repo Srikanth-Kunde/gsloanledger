@@ -20,9 +20,15 @@ Detailed individual statements in Tally format.
 - **Strict Cut-off**: Calculations stop at **31-01-2026**.
 - **Pro-rata Support**: Supports partial months via "Interest Days".
 
+### 📊 Summary Dashboard
+A high-level overview of dues across all members.
+- **Detailed Tracking**: Includes `First Loan Date` and `Last Repayment Date` for each member.
+- **Audit Ready**: Shows `Principal Due` vs `Interest Charged` separately in a 10-column layout.
+- **Fixed Calculations**: All totals strictly honor the **31-01-2026** cut-off.
+
 ## 📁 Sheet Structure
 - **Members**: Master list of member IDs, names, and contact details.
-- **Transactions**: Log of all "Loan" and "Payment" voucher types.
+- **Transactions**: Log of all "Loan", "Top-up", and "Payment" voucher types.
 - **Interest Rate Config**: Time-based interest rates.
 - **Interest Details**: Auto-generated monthly interest logs.
 - **Ledger / All Members Ledger**: The Tally-style reporting outputs.
