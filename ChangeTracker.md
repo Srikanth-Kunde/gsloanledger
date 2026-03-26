@@ -2,6 +2,10 @@
 
 A chronological record of project enhancements, refactorings, and bug fixes.
 
+## [v4.7] - 2026-03-26
+### Fixed
+- **Architectural Hardening**: Fixed a column mismatch exception in `showSummaryReport()` and `generateAllMembersLedger()`. Padded all rows in the 2D summation blocks to a consistent column count (10 and 9 respectively), ensuring 100% compatibility with the Google Sheets `setValues` API.
+
 ## [v4.6] - 2026-03-26
 ### Fixed
 - **Summary Report Stability**: Refactored the "Grand Totals" section in `showSummaryReport` to use batch rendering (`setValues`). This resolves a synchronization issue where the green total row would occasionally appear blank.

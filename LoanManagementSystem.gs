@@ -843,11 +843,11 @@ function generateAllMembersLedger() {
   
   const grandTotalRow = allLedgerSheet.getLastRow() + 2;
   const gtRows = [
-    [''],
-    ['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════'],
+    ['', '', '', '', '', '', '', '', ''],
+    ['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════', '', '', '', '', '', '', '', ''],
     ['', '', '', 'GRAND TOTALS (' + memberCount + ' Members)', formatCurrency(grandDebit), formatCurrency(grandCredit), formatCurrency(grandInterest), '', ''],
     ['', '', '', 'TOTAL AMOUNT DUE (Principal)', formatCurrency(grandDue), '', '', '', ''],
-    ['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']
+    ['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════', '', '', '', '', '', '', '', '']
   ];
   allLedgerSheet.getRange(grandTotalRow, 1, 5, 9).setValues(gtRows);
   allLedgerSheet.getRange(grandTotalRow + 2, 4, 1, 2).setFontWeight('bold').setFontSize(14).setBackground('#c6efce');
@@ -943,10 +943,10 @@ function showSummaryReport() {
   
   const lastDataRow = summarySheet.getLastRow();
   const totalsBlock = [
-    [''],
-    ['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════'],
+    ['', '', '', '', '', '', '', '', '', ''],
+    ['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════', '', '', '', '', '', '', '', '', ''],
     ['', '', 'GRAND TOTAL (' + memberCount + ' Members)', '', formatCurrency(grandLoans), formatCurrency(grandPaid), formatCurrency(grandPrincipal), formatCurrency(grandInterest), '', formatCurrency(grandTotal)],
-    ['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']
+    ['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════', '', '', '', '', '', '', '', '', '']
   ];
   summarySheet.getRange(lastDataRow + 1, 1, 4, 10).setValues(totalsBlock);
   
