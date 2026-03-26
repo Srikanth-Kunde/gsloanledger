@@ -920,6 +920,7 @@ function showSummaryReport() {
     }
     
     const principal = totalLoans - totalPaid;
+    const totalInterest = interestByMember[memberId] || 0;
     const totalDue = principal; // Principal only as per user clarification
     
     if (totalLoans > 0 || totalPaid > 0) {

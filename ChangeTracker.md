@@ -2,6 +2,12 @@
 
 A chronological record of project enhancements, refactorings, and bug fixes.
 
+## [v4.3] - 2026-03-26
+### Fixed
+- **Summary Report Bug**: Resolved `ReferenceError: totalInterest is not defined` in the `showSummaryReport` function.
+- **Rounding Strategy**: Standardized currency rounding across reports (Summary, Single Ledger, All Members Ledger) for financial consistency.
+- **Column Alignment**: Ensured "Total Due" always reflects "Principal Only" as per latest financial rules, while maintaining "Interest Charged" as a separate audit column.
+
 ## [v4.2] - 2026-03-26
 ### Added
 - **Performance Optimization**: Refactored "All Members Ledger" to use high-performance batch processing (memory buffering). This resolves execution timeout issues for large datasets.

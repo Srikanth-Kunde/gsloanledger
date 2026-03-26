@@ -1,4 +1,4 @@
-# Product Requirements Document (PRD) - Loan Management System
+# Product Requirements Document (PRD) - Loan Management System v4.3
 
 ## 1. Overview
 A Google Apps Script-based loan tracking and interest calculation engine designed for efficient member management, automated interest accrual, and professional Tally-style reporting.
