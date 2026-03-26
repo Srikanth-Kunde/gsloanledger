@@ -446,7 +446,7 @@ function generateLedger(memberId) {
   let memberName = '';
   let memberAddress = '';
   for (let i = 1; i < memberData.length; i++) {
-    if (memberData[i][0] == memberId) {
+    if (memberData[i][0].toString().trim() == memberId.toString().trim()) {
       memberName = memberData[i][1];
       memberAddress = memberData[i][3] || '';
       break;
@@ -593,6 +593,8 @@ function generateLedger(memberId) {
 
   // Account Summary - Unified rendering
   const summaryData = {
+    memberName: memberName,
+    memberId: memberId,
     firstLoanDate: firstLoanDate,
     lastPaymentDate: lastPaymentDate,
     totalDebit: totalDebit,
@@ -761,6 +763,8 @@ function generateAllMembersLedger() {
     const principalDue = Math.max(0, totalDebit - totalCredit);
     const mTotalDue = principalDue;
     const summaryRows = getAccountSummaryRows({ 
+      memberName: memberName,
+      memberId: memberId,
       firstLoanDate, lastPaymentDate, totalDebit, totalCredit, totalInterest, 
       totalDue: mTotalDue, asOnDate: '31-01-2026' 
     });
@@ -820,9 +824,15 @@ function generateAllMembersLedger() {
       allLedgerSheet.getRange(i + 1, 4).setFormula(`=HYPERLINK("${indexUrl}", "⬆️ Back to Index")`).setFontColor('#1a73e8').setFontLine('underline');
     }
     if (row[0] === 'ACCOUNT SUMMARY') {
-      allLedgerSheet.getRange(i + 1, 1, 13, 9).setBackground('#C6EFCE');
-      allLedgerSheet.getRange(i + 1, 1, 1, 9).setFontWeight('bold').setHorizontalAlignment('center');
-      allLedgerSheet.getRange(i + 1, 4, 13, 2).setFontWeight('bold');
+      const summaryHeight = 15;
+      allLedgerSheet.getRange(i + 1, 1, summaryHeight, 9).setBackground('#C6EFCE');
+      allLedgerSheet.getRange(i + 1, 1, 1, 9).merge().setFontWeight('bold').setHorizontalAlignment('center');
+      allLedgerSheet.getRange(i + 2, 1, 1, 9).merge(); // Dashed
+      allLedgerSheet.getRange(i + 3, 4, 7, 2).setFontWeight('bold'); // Labels/Values (Name, ID, etc)
+      allLedgerSheet.getRange(i + 10, 1, 1, 9).merge(); // Dashed
+      allLedgerSheet.getRange(i + 11, 1, 1, 9).merge(); // Double
+      allLedgerSheet.getRange(i + 12, 4, 1, 2).setFontWeight('bold'); // Total Due
+      allLedgerSheet.getRange(i + 13, 1, 1, 9).merge(); // Double
     }
     if (typeof row[0] === 'string' && row[0].includes('(ID: ')) {
       allLedgerSheet.getRange(i + 1, 1, 1, 9).merge().setFontWeight('bold').setFontSize(12).setBackground('#e8f0fe');
@@ -844,6 +854,7 @@ function generateAllMembersLedger() {
   allLedgerSheet.getRange(grandTotalRow + 2, 4, 1, 2).setFontWeight('bold').setFontSize(14).setBackground('#c6efce');
   
   for (let i = 1; i <= 9; i++) { allLedgerSheet.autoResizeColumn(i); }
+  allLedgerSheet.setColumnWidth(1, 50); // Explicitly narrow Sl No column
   ui.alert(`✅ All Members Ledger Generated!\n\n• ${memberCount} members processed.`);
 }
 
@@ -954,9 +965,17 @@ function renderAccountSummary(sheet, data) {
   const rows = getAccountSummaryRows(data);
   const startRow = sheet.getLastRow() + 2;
   sheet.getRange(startRow, 1, rows.length, 9).setValues(rows);
+  
+  // Formatting
   sheet.getRange(startRow, 1, rows.length, 9).setBackground('#C6EFCE');
-  sheet.getRange(startRow, 4, rows.length, 2).setFontWeight('bold');
-  sheet.getRange(startRow, 1, 1, 9).setFontWeight('bold').setHorizontalAlignment('center');
+  sheet.getRange(startRow, 1, 1, 9).merge().setFontWeight('bold').setHorizontalAlignment('center'); // Title
+  sheet.getRange(startRow + 1, 1, 1, 9).merge(); // Dashed line
+  sheet.getRange(startRow + 2, 4, 7, 2).setFontWeight('bold'); // Labels and Values
+  sheet.getRange(startRow + 9, 1, 1, 9).merge(); // Dashed line
+  sheet.getRange(startRow + 10, 1, 1, 9).merge(); // Double line
+  sheet.getRange(startRow + 11, 4, 1, 2).setFontWeight('bold'); // Total Due
+  sheet.getRange(startRow + 12, 1, 1, 9).merge(); // Double line
+  
   sheet.getRange(sheet.getLastRow(), 2, 1, 7).setBorder(true, null, true, null, null, null);
 }
 
@@ -964,6 +983,8 @@ function getAccountSummaryRows(data) {
   return [
     ['ACCOUNT SUMMARY', '', '', '', '', '', '', '', ''],
     ['───────────────────────────────────────────────────────────────────────────────────────', '', '', '', '', '', '', '', ''],
+    ['', '', '', 'Member Name:', '', data.memberName, '', '', ''],
+    ['', '', '', 'Member ID:', '', data.memberId, '', '', ''],
     ['', '', '', 'First Loan Date:', '', formatDate(data.firstLoanDate) || 'No Loans', '', '', ''],
     ['', '', '', 'Last Repayment Date:', '', formatDate(data.lastPaymentDate) || 'No Payments', '', '', ''],
     ['', '', '', 'Total Principal Given (Dr)', '', formatCurrency(data.totalDebit), '', '', ''],

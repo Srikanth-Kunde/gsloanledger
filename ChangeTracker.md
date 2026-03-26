@@ -2,6 +2,15 @@
 
 A chronological record of project enhancements, refactorings, and bug fixes.
 
+## [v4.4] - 2026-03-26
+### Added
+- **Improved Layouts**: Merged decorative separator rows across all columns in **Summary Report**, **Single Ledger**, and **Batch Ledger** to prevent unintended column expansion.
+- **Enhanced Account Summary**: Added **Member Name** and **Member ID** to the green summary block for better traceability.
+- **Column Width Management**: Explicitly set the "Sl No" column width to prevent unintended expansion during auto-resizing.
+
+### Fixed
+- **Single Ledger Header**: Fixed a data comparison bug that was preventing Name and ID from printing in the single member ledger header.
+
 ## [v4.3] - 2026-03-26
 ### Fixed
 - **Summary Report Bug**: Resolved `ReferenceError: totalInterest is not defined` in the `showSummaryReport` function.
