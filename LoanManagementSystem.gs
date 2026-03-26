@@ -942,18 +942,18 @@ function showSummaryReport() {
   }
   
   const lastDataRow = summarySheet.getLastRow();
-  summarySheet.appendRow(['']);
-  const separator1Row = lastDataRow + 2;
-  summarySheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']);
-  summarySheet.getRange(separator1Row, 1, 1, 10).merge();
-
-  summarySheet.appendRow(['', '', 'GRAND TOTAL (' + memberCount + ' Members)', '', formatCurrency(grandLoans), formatCurrency(grandPaid), formatCurrency(grandPrincipal), formatCurrency(grandInterest), '', formatCurrency(grandTotal)]);
-  const grandTotalRow = lastDataRow + 3;
-  summarySheet.getRange(grandTotalRow, 1, 1, 10).setFontWeight('bold').setBackground('#c6efce');
-
-  const separator2Row = lastDataRow + 4;
-  summarySheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']);
-  summarySheet.getRange(separator2Row, 1, 1, 10).merge();
+  const totalsBlock = [
+    [''],
+    ['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════'],
+    ['', '', 'GRAND TOTAL (' + memberCount + ' Members)', '', formatCurrency(grandLoans), formatCurrency(grandPaid), formatCurrency(grandPrincipal), formatCurrency(grandInterest), '', formatCurrency(grandTotal)],
+    ['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']
+  ];
+  summarySheet.getRange(lastDataRow + 1, 1, 4, 10).setValues(totalsBlock);
+  
+  // Formatting
+  summarySheet.getRange(lastDataRow + 2, 1, 1, 10).merge(); // First separator
+  summarySheet.getRange(lastDataRow + 3, 1, 1, 10).setFontWeight('bold').setBackground('#C6EFCE'); // Grand Total
+  summarySheet.getRange(lastDataRow + 4, 1, 1, 10).merge(); // Second separator
   
   // Final Formatting
   summarySheet.getRange('A1:J1').merge().setFontWeight('bold').setFontSize(18).setBackground('#1a73e8').setFontColor('white');

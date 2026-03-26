@@ -2,6 +2,10 @@
 
 A chronological record of project enhancements, refactorings, and bug fixes.
 
+## [v4.6] - 2026-03-26
+### Fixed
+- **Summary Report Stability**: Refactored the "Grand Totals" section in `showSummaryReport` to use batch rendering (`setValues`). This resolves a synchronization issue where the green total row would occasionally appear blank.
+
 ## [v4.5] - 2026-03-26
 ### Fixed
 - **Header Data Integrity**: Restructured the Single Member Ledger header to merge ranges *before* setting combined value strings, preventing Google Sheets from discarding Member Name/ID data.
