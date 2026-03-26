@@ -2,6 +2,15 @@
 
 A chronological record of project enhancements, refactorings, and bug fixes.
 
+## [v4.2] - 2026-03-26
+### Added
+- **Performance Optimization**: Refactored "All Members Ledger" to use high-performance batch processing (memory buffering). This resolves execution timeout issues for large datasets.
+- **Financial Alignment**: Aligned "Total Due" calculation across all reports (Summary, Single Ledger, All Ledger) to consistently reflect **Principal Outstanding Only** (as per user clarification that interest is considered paid/settled separately).
+
+### Fixed
+- **Grand Totals**: Updated the All Members Ledger grand total footer to explicitly show the **Principal** total due.
+- **Reporting Consistency**: Synchronized the green "Account Summary" block logic with the 10-column Summary Report.
+
 ## [v4.1] - 2026-03-26
 ### Added
 - **Expanded Summary Report**: Now features 10 comprehensive columns including `First Loan Date`, `Last Repayment Date`, and `Interest Charged`.

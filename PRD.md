@@ -10,6 +10,12 @@ A Google Apps Script-based loan tracking and interest calculation engine designe
 - **Summary Dashboard**: 10-column high-level overview including `First Loan Date`, `Last Repayment Date`, and `Interest Charged` for total audit visibility.
 - **Navigation Index**: Clickable Table of Contents for batch ledgers to quickly jump to any member.
 
+### 📋 Single Member Ledger
+Detailed individual statements in Tally format.
+- Includes **Principal Balance** tracking.
+- Green highlighted **Account Summary** with key loan dates.
+- **Total Due**: Accurately reflects **Principal balance** only (as interest is settled separately).
+
 ## 3. Financial Calculation Rules
 - **Interest Cycle**: Interest starts accruing from the month *following* the loan or top-up (e.g., Jan → Feb interest).
 - **Principal-Only Balance**: The "Balance" column in ledgers tracks only the principal amount (Loans + Top-ups - Repayments).

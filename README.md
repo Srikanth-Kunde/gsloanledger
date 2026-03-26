@@ -5,15 +5,15 @@ A comprehensive loan tracking and interest calculation system built on Google Sh
 ## 🚀 Navigation & Features
 
 ### 📋 All Members Ledger (With Index)
-Professional batch reporting with a built-in **Navigation Index**.
+Professional batch reporting with a built-in **Navigation Index** and high-speed **Batch Processing**.
+- **Execution Speed**: Uses memory buffering to generate statements for all members instantly, avoiding script timeouts.
 - **Quick Jump**: Click any member name in the index at the top to jump directly to their ledger.
 - **Back to Index**: Use the "⬆️ Back to Index" link in each member's summary to return to the top.
 - **Account Summary**: Synchronized green summary blocks for every member.
 
 ### 📋 Single Member Ledger
 Detailed individual statements in Tally format.
-- Includes **Principal-Only Balance** tracking.
-- Green highlighted **Account Summary** with key loan dates.
+- **Total Due**: Reflects the **Principal Outstanding** as of the cut-off date.
 
 ### 🔄 Interest Engine
 - Automated monthly interest generation with configurable rates.
