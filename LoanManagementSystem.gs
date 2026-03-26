@@ -35,6 +35,8 @@ const SHEETS = {
   SUMMARY: 'Summary'
 };
 
+const CUTOFF_DATE = new Date(2026, 0, 31); // January 31, 2026
+
 // ═══════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════
@@ -349,7 +351,7 @@ function generateInterestAll() {
   const txnData = txnSheet.getDataRange().getValues();
   const headers = txnData[0];
   
-  const upToDate = new Date(2026, 0, 31); // Hardcoded cut-off: Jan 2026
+  const upToDate = CUTOFF_DATE;
   let processedCount = 0;
   let allInterestRows = [];
   
@@ -468,15 +470,17 @@ function generateLedger(memberId) {
       const vType = txnData[i][voucherCol];
       if (vType && !vType.toString().includes('Interest')) {
         const txnDate = parseDate(txnData[i][colMap['Date']]);
-        allEntries.push({
-          date: txnDate,
-          type: vType.toString().trim(),
-          debit: parseFloat(txnData[i][colMap['Debit']] || 0),
-          credit: parseFloat(txnData[i][colMap['Credit']] || 0),
-          interest: 0,
-          narration: txnData[i][colMap['Narration']] || '',
-          isInterest: false
-        });
+        if (txnDate && txnDate <= CUTOFF_DATE) {
+          allEntries.push({
+            date: txnDate,
+            type: vType.toString().trim(),
+            debit: parseFloat(txnData[i][colMap['Debit']] || 0),
+            credit: parseFloat(txnData[i][colMap['Credit']] || 0),
+            interest: 0,
+            narration: txnData[i][colMap['Narration']] || '',
+            isInterest: false
+          });
+        }
       }
     }
   }
@@ -488,7 +492,7 @@ function generateLedger(memberId) {
       if (intData[i][0] == memberId) {
         const intDate = parseDate(intData[i][7]); // Date column
         // Strict Cut-off: Skip entries after Jan 2026
-        if (intDate > new Date(2026, 0, 31)) continue;
+        if (intDate > CUTOFF_DATE) continue;
         
         const intAmount = parseFloat(intData[i][4] || 0); // Interest Amount
         const rate = intData[i][5]; // Rate
@@ -626,7 +630,7 @@ function generateLedger(memberId) {
     totalCredit: totalCredit,
     totalInterest: totalInterest,
     totalDue: totalDue,
-    asOnDate: '31-01-2026' // Cut-off date
+    asOnDate: formatDate(CUTOFF_DATE) // Cut-off date
   };
   
   renderAccountSummary(ledgerSheet, summaryData);
@@ -745,7 +749,7 @@ function generateAllMembersLedger() {
       const mid = intData[i][0];
       const intDate = parseDate(intData[i][7]);
       // Strict Cut-off: Skip entries after Jan 2026
-      if (intDate > new Date(2026, 0, 31)) continue;
+      if (intDate > CUTOFF_DATE) continue;
       
       if (!interestByMember[mid]) {
         interestByMember[mid] = 0;
@@ -785,14 +789,17 @@ function generateAllMembersLedger() {
       if (txnData[i][colMap['Member ID']] == memberId) {
         const vType = txnData[i][voucherCol];
         if (vType && !vType.toString().includes('Interest')) {
-          memberTxns.push({
-            date: parseDate(txnData[i][colMap['Date']]),
-            type: vType.toString().trim(),
-            debit: parseFloat(txnData[i][colMap['Debit']] || 0),
-            credit: parseFloat(txnData[i][colMap['Credit']] || 0),
-            narration: txnData[i][colMap['Narration']] || '',
-            isInterest: false
-          });
+          const txnDate = parseDate(txnData[i][colMap['Date']]);
+          if (txnDate && txnDate <= CUTOFF_DATE) {
+            memberTxns.push({
+              date: txnDate,
+              type: vType.toString().trim(),
+              debit: parseFloat(txnData[i][colMap['Debit']] || 0),
+              credit: parseFloat(txnData[i][colMap['Credit']] || 0),
+              narration: txnData[i][colMap['Narration']] || '',
+              isInterest: false
+            });
+          }
         }
       }
     }
@@ -993,17 +1000,18 @@ function showSummaryReport() {
   
   summarySheet.clear();
   
-  // Tally-style header
+  // Cut-off Date: January 31, 2026
+  const cutOffDate = CUTOFF_DATE;
+  
+  // Tally-style header matching user layout
   summarySheet.appendRow(['LOAN SUMMARY REPORT']);
-  summarySheet.appendRow(['']);
   summarySheet.appendRow(['Report Date:', formatDate(new Date())]);
-  summarySheet.appendRow(['']);
-  summarySheet.appendRow(['']);
   
   // Column headers
   summarySheet.appendRow([
-    'S.No', 'ID', 'Member Name', 'Total Loans (Dr)', 'Total Paid (Cr)', 'Principal Due', 'Interest Due', 'Total Due'
+    "'Sl no", 'ID', 'Member Name', 'First Loan Date', 'Total Loan(Dr)', 'Total Paid (Cr)', 'Principal Due', 'Interest Charged', 'Last Repayment Date', 'Total Due'
   ]);
+  const headerRow = summarySheet.getLastRow();
   
   const memberData = memberSheet.getDataRange().getValues().slice(1);
   const txnData = txnSheet.getDataRange().getValues();
@@ -1015,14 +1023,17 @@ function showSummaryReport() {
   });
   const voucherCol = getVoucherColumn(headers);
   
-  // Get interest totals
+  // Get interest totals (filtered by cut-off)
   let interestByMember = {};
   if (interestSheet) {
     const intData = interestSheet.getDataRange().getValues();
     for (let i = 1; i < intData.length; i++) {
       const mid = intData[i][0];
-      if (!interestByMember[mid]) interestByMember[mid] = 0;
-      interestByMember[mid] += parseFloat(intData[i][4] || 0);
+      const intDate = parseDate(intData[i][7]);
+      if (intDate && intDate <= cutOffDate) {
+        if (!interestByMember[mid]) interestByMember[mid] = 0;
+        interestByMember[mid] += parseFloat(intData[i][4] || 0);
+      }
     }
   }
   
@@ -1037,10 +1048,15 @@ function showSummaryReport() {
     if (!memberId) continue;
     
     let totalLoans = 0, totalPaid = 0;
+    let firstLoanDate = null;
+    let lastRepaymentDate = null;
     
     for (let i = 1; i < txnData.length; i++) {
       const row = txnData[i];
       if (row[colMap['Member ID']] == memberId) {
+        const txnDate = parseDate(row[colMap['Date']]);
+        if (!txnDate || txnDate > cutOffDate) continue;
+
         const voucherType = row[voucherCol];
         if (!voucherType || voucherType.toString().includes('Interest')) continue;
         
@@ -1049,8 +1065,10 @@ function showSummaryReport() {
         
         if (voucherType.toString().trim() === 'Loan') {
           totalLoans += debit;
+          if (!firstLoanDate || txnDate < firstLoanDate) firstLoanDate = txnDate;
         } else if (voucherType.toString().trim() === 'Payment') {
           totalPaid += credit;
+          if (!lastRepaymentDate || txnDate > lastRepaymentDate) lastRepaymentDate = txnDate;
         }
       }
     }
@@ -1065,10 +1083,12 @@ function showSummaryReport() {
         sno,
         memberId,
         memberName,
+        formatDate(firstLoanDate),
         formatCurrency(totalLoans),
         formatCurrency(totalPaid),
         formatCurrency(principal),
         formatCurrency(totalInterest),
+        formatDate(lastRepaymentDate) || 'No Payments',
         formatCurrency(totalDue)
       ]);
       
@@ -1081,34 +1101,37 @@ function showSummaryReport() {
     }
   }
   
-  // Totals
+  // Totals Section
   summarySheet.appendRow(['']);
   summarySheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']);
   summarySheet.appendRow([
-    '', '', 'GRAND TOTAL (' + memberCount + ' Members)',
+    '', '', 'GRAND TOTAL (' + memberCount + ' Members)', '',
     formatCurrency(grandLoans),
     formatCurrency(grandPaid),
     formatCurrency(grandPrincipal),
     formatCurrency(grandInterest),
+    '',
     formatCurrency(grandTotal)
   ]);
   summarySheet.appendRow(['═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════']);
   
   // Formatting
   summarySheet.getRange('A1').setFontWeight('bold').setFontSize(18).setBackground('#1a73e8').setFontColor('white');
-  summarySheet.getRange('A1:H1').merge();
+  summarySheet.getRange('A1:J1').merge();
   
-  summarySheet.getRange('A6:H6').setFontWeight('bold').setBackground('#4285F4').setFontColor('white');
+  summarySheet.getRange(headerRow, 1, 1, 10).setFontWeight('bold').setBackground('#4285F4').setFontColor('white');
   
   const lastRow = summarySheet.getLastRow();
-  summarySheet.getRange(lastRow - 1, 1, 1, 8).setFontWeight('bold').setBackground('#c6efce');
+  // Highlight Grand Total Data Row
+  summarySheet.getRange(lastRow - 1, 1, 1, 10).setFontWeight('bold').setBackground('#c6efce');
   
-  for (let i = 1; i <= 8; i++) {
+  for (let i = 1; i <= 10; i++) {
     summarySheet.autoResizeColumn(i);
   }
   
-  SpreadsheetApp.getUi().alert(`✅ Summary Report generated!\n\n• ${memberCount} members\n• Total Due: ${formatCurrency(grandTotal)}`);
+  SpreadsheetApp.getUi().alert(`✅ Summary Report generated!\n\n• ${memberCount} members\n• Total Due: ${formatCurrency(grandTotal)}\n• Cut-off Date: 31-Jan-2026`);
 }
+
 
 // ═══════════════════════════════════════════════════════════════
 // SETTINGS & HELP
