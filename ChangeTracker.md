@@ -2,6 +2,10 @@
 
 A chronological record of project enhancements, refactorings, and bug fixes.
 
+## [v4.8] - 2026-03-26
+### Fixed
+- **Exhaustive Architectural Hardening**: Fixed a hidden column mismatch bug in the `generateAllMembersLedger` batch buffer. Replaced all 1-column `allRows.push` calls with properly padded 9-column rows, ensuring 100% stability across the entire batch generation process.
+
 ## [v4.7] - 2026-03-26
 ### Fixed
 - **Architectural Hardening**: Fixed a column mismatch exception in `showSummaryReport()` and `generateAllMembersLedger()`. Padded all rows in the 2D summation blocks to a consistent column count (10 and 9 respectively), ensuring 100% compatibility with the Google Sheets `setValues` API.

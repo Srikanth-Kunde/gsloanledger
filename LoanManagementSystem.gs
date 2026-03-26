@@ -768,12 +768,12 @@ function generateAllMembersLedger() {
       totalDue: mTotalDue, asOnDate: '31-01-2026' 
     });
     
-    allRows.push(['']);
+    allRows.push(new Array(9).fill(''));
     summaryRows.forEach(row => allRows.push(row));
     allRows.push(['', '', '', 'BACK_TO_INDEX_LINK', '', '', '', '', '']); // Marker for hyperlinks
-    allRows.push(['']);
-    allRows.push(['─'.repeat(100)]);
-    allRows.push(['']);
+    allRows.push(new Array(9).fill(''));
+    allRows.push(['─'.repeat(100), '', '', '', '', '', '', '', '']);
+    allRows.push(new Array(9).fill(''));
     
     memberIndices.push({
       sno: memberCount + 1, id: memberId, name: memberName,
